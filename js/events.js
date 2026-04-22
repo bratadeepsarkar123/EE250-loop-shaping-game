@@ -31,6 +31,7 @@ window.Events = (function() {
                     GS.currentHint = '🌀 Crosswind! Sinusoidal disturbance — tests S(jω). Balance ω_gc vs dd.';
                     break;
                 case 'stability':
+                    if (typeof GS.DD !== 'number') return;
                     if (preEventDD === null) {
                         preEventDD = GS.DD;
                     }
@@ -66,7 +67,10 @@ window.Events = (function() {
                 let type;
                 do {
                     type = eventTypes[Math.floor(Math.random() * eventTypes.length)];
-                } while (type === 'slope' && GS.slopeActive); // only trigger slope if not active
+                } while (
+                    (type === 'slope' && GS.slopeActive) ||
+                    (type === 'stability' && preEventDD !== null)
+                );
 
                 this.trigger(type, GS);
             }
@@ -81,17 +85,7 @@ window.Events = (function() {
                 }
             }
 
-            // 4. SpeedBoost auto-cancel
-            if (GS.speedBoostActive) {
-                if (GS.boostTimer !== undefined) {
-                    GS.boostTimer--;
-                    if (GS.boostTimer <= 0) {
-                        GS.speedBoostActive = false;
-                    }
-                }
-            }
-
-            // 5. Stability event auto-recovery
+            // 4. Stability event auto-recovery
             if (preEventDD !== null) {
                 stabilityTimer++;
                 if (stabilityTimer > 200) {
