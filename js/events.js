@@ -1,0 +1,104 @@
+window.Events = (function() {
+    let crosswindTimer = 0;
+    let stabilityTimer = 0;
+    let preEventDD = null;
+
+    return {
+        trigger: function(type, GS) {
+            switch (type) {
+                case 'wind':
+                    GS.disturbance += 60;
+                    GS.currentHint = '💨 Wind Gust! Slow drift — raise K_low to push back.';
+                    break;
+                case 'slope':
+                    GS.slopeActive = true;
+                    GS.slopeMag = 18;
+                    GS.currentHint = '⛰️ Slope! Lane drifting away permanently — raise K_low high (needs Kv).';
+                    break;
+                case 'noise':
+                    GS.noiseAmp = 22;
+                    GS.currentHint = '📡 Sensor Glitch! Car jittering — raise α_hf to filter noise.';
+                    break;
+                case 'pothole':
+                    GS.disturbance += 110 * (Math.random() > 0.5 ? 1 : -1);
+                    GS.currentHint = '🕳️ Pothole! Sharp impulse — raise ω_gc for fast response. Watch PM!';
+                    break;
+                case 'crosswind':
+                    GS.crosswindActive = true;
+                    GS.crosswindFreq = 0.8 + Math.random() * 1.2;
+                    GS.crosswindAmp = 18;
+                    crosswindTimer = 0; // reset duration timer
+                    GS.currentHint = '🌀 Crosswind! Sinusoidal disturbance — tests S(jω). Balance ω_gc vs dd.';
+                    break;
+                case 'stability':
+                    if (preEventDD === null) {
+                        preEventDD = GS.DD;
+                    }
+                    GS.DD = 0.3; // force low PM
+                    stabilityTimer = 0; // reset recovery timer
+                    GS.currentHint = '⚡ Stability Check! PM dropped — raise dd before car oscillates!';
+                    break;
+                case 'speedzone':
+                    if (!GS.checkpoints) GS.checkpoints = [];
+                    GS.checkpoints.push({ x: GS.distanceTravelled + 400, collected: false });
+                    GS.currentHint = '🏁 Speed Zone ahead! Raise ω_gc for bandwidth boost — but watch PM!';
+                    break;
+            }
+        },
+
+        tick: function(GS) {
+            // 1. Increment event timer
+            GS.eventTimer = (GS.eventTimer || 0) + 1;
+
+            // Initialize nextEventIn if it doesn't exist
+            if (GS.nextEventIn === undefined) {
+                GS.nextEventIn = 150 + Math.floor(Math.random() * 120);
+            }
+
+            // 2. Trigger random event
+            if (GS.eventTimer >= GS.nextEventIn) {
+                GS.eventTimer = 0;
+                GS.nextEventIn = 150 + Math.floor(Math.random() * 120);
+
+                const eventTypes = ['wind', 'slope', 'noise', 'pothole', 'crosswind', 'speedzone'];
+
+                // Keep picking until we get a valid one
+                let type;
+                do {
+                    type = eventTypes[Math.floor(Math.random() * eventTypes.length)];
+                } while (type === 'slope' && GS.slopeActive); // only trigger slope if not active
+
+                this.trigger(type, GS);
+            }
+
+            // 3. Crosswind auto-cancel
+            if (GS.crosswindActive) {
+                crosswindTimer++;
+                if (crosswindTimer > 150) {
+                    GS.crosswindActive = false;
+                    GS.crosswindAmp = 0;
+                    crosswindTimer = 0;
+                }
+            }
+
+            // 4. SpeedBoost auto-cancel
+            if (GS.speedBoostActive) {
+                if (GS.boostTimer !== undefined) {
+                    GS.boostTimer--;
+                    if (GS.boostTimer <= 0) {
+                        GS.speedBoostActive = false;
+                    }
+                }
+            }
+
+            // 5. Stability event auto-recovery
+            if (preEventDD !== null) {
+                stabilityTimer++;
+                if (stabilityTimer > 200) {
+                    GS.DD = preEventDD;
+                    preEventDD = null;
+                }
+            }
+        }
+    };
+})();
