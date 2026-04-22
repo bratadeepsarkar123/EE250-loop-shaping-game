@@ -21,6 +21,7 @@ window.Events = (function() {
                     break;
                 case 'crosswind':
                     GS.crosswindActive = true;
+                    GS._crosswindTimer = 0;
                     GS.crosswindFreq = 0.8 + Math.random() * 1.2;
                     GS.crosswindAmp = 18;
                     GS.currentHint = '🌀 Crosswind! Sinusoidal disturbance — tests S(jω). Balance ω_gc vs dd.';
@@ -81,8 +82,10 @@ window.Events = (function() {
 
             if (GS._preEventDD !== undefined) {
                 GS._stabilityTimer = (GS._stabilityTimer || 0) + 1;
-                if (GS._stabilityTimer > 200 && GS.DD === 0.3) {
-                    GS.DD = GS._preEventDD;
+                if (GS._stabilityTimer > 200) {
+                    if (GS.DD === 0.3) {
+                        GS.DD = GS._preEventDD;
+                    }
                     GS._preEventDD = undefined;
                     GS._stabilityTimer = 0;
                 }
@@ -94,7 +97,7 @@ window.Events = (function() {
                     GS.speedBoostActive = false;
                     GS._boostTimer = 0;
                 }
-            } else if (!GS.speedBoostActive) {
+            } else {
                 GS._boostTimer = 0;
             }
         }
