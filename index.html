@@ -4,51 +4,17 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Loop-Shaping Car Control Game</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<style>
-  *{box-sizing:border-box;margin:0;padding:0;}
-  body{background:#0d0d1a;color:#e0e0ff;font-family:'Segoe UI',monospace;overflow:hidden;}
-  #root{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto 1fr auto;height:100vh;gap:6px;padding:6px;}
-  #header{grid-column:1/-1;background:#12122a;border-radius:8px;padding:8px 16px;display:flex;align-items:center;justify-content:space-between;border:1px solid #2a2a5a;}
-  #header h1{font-size:1.1rem;color:#7eb8ff;letter-spacing:1px;}
-  #score-box{display:flex;gap:20px;font-size:0.85rem;}
-  .score-item{display:flex;flex-direction:column;align-items:center;}
-  .score-val{font-size:1.3rem;font-weight:bold;color:#50fa7b;}
-  #game-panel{background:#0a0a1f;border-radius:8px;border:1px solid #2a2a5a;display:flex;flex-direction:column;overflow:hidden;}
-  #road-canvas{flex:1;width:100%;}
-  #hint-box{padding:8px 12px;min-height:52px;background:#0f0f2a;border-top:1px solid #2a2a5a;}
-  .hint-title{font-size:0.7rem;color:#888;margin-bottom:2px;}
-  #hint-text{font-size:0.85rem;color:#ffd700;line-height:1.4;}
-  #right-panel{display:flex;flex-direction:column;gap:6px;}
-  #bode-panel{background:#0a0a1f;border-radius:8px;border:1px solid #2a2a5a;padding:10px;flex:1;}
-  #bode-panel h3{font-size:0.8rem;color:#888;margin-bottom:6px;}
-  #bode-canvas-wrap{height:calc(100% - 28px);}
-  #controls-panel{background:#0a0a1f;border-radius:8px;border:1px solid #2a2a5a;padding:12px;}
-  #controls-panel h3{font-size:0.8rem;color:#888;margin-bottom:10px;letter-spacing:1px;}
-  .ctrl-row{margin-bottom:10px;}
-  .ctrl-label{display:flex;justify-content:space-between;font-size:0.75rem;margin-bottom:3px;}
-  .ctrl-name{color:#7eb8ff;}
-  .ctrl-val{color:#50fa7b;font-weight:bold;}
-  input[type=range]{width:100%;height:6px;-webkit-appearance:none;background:#1e1e3f;border-radius:3px;outline:none;}
-  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#7eb8ff;cursor:pointer;border:2px solid #0d0d1a;}
-  #footer{grid-column:1/-1;background:#12122a;border-radius:8px;padding:6px 16px;display:flex;align-items:center;gap:16px;border:1px solid #2a2a5a;font-size:0.72rem;color:#888;}
-  .legend-item{display:flex;align-items:center;gap:5px;}
-  .legend-dot{width:10px;height:10px;border-radius:50%;}
-  #obstacle-strip{height:28px;background:#0a0a1f;border-top:1px solid #1a1a3a;display:flex;align-items:center;padding:0 10px;gap:8px;font-size:0.7rem;color:#888;}
-  .ctrl-desc{font-size:0.65rem;color:#556;margin-top:1px;}
-  #game-wrap{position:relative;flex:1;overflow:hidden;}
-  #event-overlay{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:1.6rem;font-weight:bold;pointer-events:none;opacity:0;transition:opacity 0.3s;}
-</style>
+<link rel="stylesheet" href="css/style.css"/>
 </head>
 <body>
 <div id="root">
   <div id="header">
     <h1>🚗 Loop-Shaping Car Control — EE250 Live Game</h1>
     <div id="score-box">
-      <div class="score-item"><span class="score-val" id="score-disp">100</span><span>Score</span></div>
-      <div class="score-item"><span class="score-val" id="pm-disp">—</span><span>Phase Margin</span></div>
-      <div class="score-item"><span class="score-val" id="kv-disp">—</span><span>Kv</span></div>
-      <div class="score-item"><span class="score-val" id="err-disp">0.0</span><span>Error</span></div>
+      <div class="score-item"><span class="score-val" id="score-disp">100</span><span>🏁 Speed</span></div>
+      <div class="score-item"><span class="score-val" id="acc-disp">100</span><span>🎯 Accuracy</span></div>
+      <div class="score-item"><span class="score-val" id="smooth-disp">100</span><span>📡 Smooth</span></div>
+      <div class="score-item"><span class="score-val" id="total-disp">100</span><span>★ Total</span></div>
     </div>
   </div>
 
@@ -119,251 +85,13 @@
   </div>
 </div>
 
-<script>
-const state={
-  carY:0,carVel:0,targetY:0,error:0,
-  score:100,scoreF:100,
-  t:0,dt:0.033,
-  disturbance:0,distDecay:0.96,
-  noiseAmp:0,
-  slopeActive:false,slopeMag:0,
-  eventTimer:0,nextEventIn:180,
-  roadOffset:0,carX:0,
-  obstacles:[],errorTrace:[],
-  Klow:5,Wgc:2,DD:1.0,HF:1.5,
-  PM:45,Kv:5,integral:0,
-};
-
-const roadCanvas=document.getElementById('road-canvas');
-const ctx=roadCanvas.getContext('2d');
-const gameWrap=document.getElementById('game-wrap');
-
-function resizeCanvases(){
-  roadCanvas.width=gameWrap.clientWidth;
-  roadCanvas.height=gameWrap.clientHeight;
-  state.carX=roadCanvas.width*0.3;
-}
-resizeCanvases();
-window.addEventListener('resize',()=>{resizeCanvases();updateBode();});
-
-const bodeCtx=document.getElementById('bode-chart').getContext('2d');
-const freqs=[];
-for(let e=-1;e<=3;e+=0.05)freqs.push(Math.pow(10,e));
-
-function computeBodeMag(w,Klow,Wgc,DD,HF){
-  const w1=Wgc*Math.pow(10,-DD/2);
-  const w2=Wgc*Math.pow(10,DD/2);
-  let mag;
-  if(w<w1){mag=Klow/w;}
-  else if(w<=w2){mag=Wgc/w;}
-  else{mag=(Wgc/w2)*Math.pow(w2/w,HF);}
-  return mag*(Klow/Wgc);
-}
-function magTodB(m){return 20*Math.log10(Math.max(m,1e-6));}
-
-let bodeChart;
-function initBode(){
-  const data=freqs.map(w=>magTodB(computeBodeMag(w,state.Klow,state.Wgc,state.DD,state.HF)));
-  bodeChart=new Chart(bodeCtx,{
-    type:'line',
-    data:{
-      labels:freqs.map(w=>w.toFixed(2)),
-      datasets:[
-        {label:'|L(jω)| dB',data:data,borderColor:'#7eb8ff',borderWidth:2,pointRadius:0,tension:0.3,fill:false},
-        {label:'0 dB',data:freqs.map(()=>0),borderColor:'#fa5050',borderWidth:1,borderDash:[4,4],pointRadius:0,fill:false},
-        {label:'ω_gc',data:freqs.map(w=>Math.abs(Math.log10(w)-Math.log10(state.Wgc))<0.06?60:null),borderColor:'#50fa7b',borderWidth:2,pointRadius:4,pointBackgroundColor:'#50fa7b',showLine:false,fill:false}
-      ]
-    },
-    options:{
-      animation:false,responsive:true,maintainAspectRatio:false,
-      scales:{
-        x:{title:{display:true,text:'ω (rad/s)',color:'#888',font:{size:9}},ticks:{color:'#666',font:{size:8},callback:(v,i)=>{const w=freqs[i];if([0.1,1,10,100,1000].some(x=>Math.abs(w-x)<x*0.15))return w<1?w.toFixed(1):w.toFixed(0);return '';},maxRotation:0},grid:{color:'#1a1a3a'}},
-        y:{title:{display:true,text:'dB',color:'#888',font:{size:9}},ticks:{color:'#666',font:{size:8}},grid:{color:'#1a1a3a'},min:-80,max:80}
-      },
-      plugins:{legend:{labels:{color:'#888',font:{size:8},boxWidth:12}},tooltip:{enabled:false}}
-    }
-  });
-}
-initBode();
-
-function updateBode(){
-  if(!bodeChart)return;
-  bodeChart.data.datasets[0].data=freqs.map(w=>magTodB(computeBodeMag(w,state.Klow,state.Wgc,state.DD,state.HF)));
-  bodeChart.data.datasets[2].data=freqs.map(w=>Math.abs(Math.log10(w)-Math.log10(state.Wgc))<0.07?60:null);
-  bodeChart.update('none');
-}
-
-function bindSlider(id,valId,stateKey,digits){
-  const el=document.getElementById(id);
-  const disp=document.getElementById(valId);
-  el.addEventListener('input',()=>{
-    state[stateKey]=parseFloat(el.value);
-    disp.textContent=parseFloat(el.value).toFixed(digits);
-    updateDerived();updateBode();
-  });
-}
-bindSlider('klow','klow-val','Klow',1);
-bindSlider('wgc','wgc-val','Wgc',1);
-bindSlider('dd','dd-val','DD',1);
-bindSlider('hf','hf-val','HF',1);
-
-function updateDerived(){
-  state.PM=Math.min(90,45*state.DD);
-  state.Kv=state.Klow;
-  document.getElementById('pm-disp').textContent=state.PM.toFixed(0)+'°';
-  document.getElementById('kv-disp').textContent=state.Kv.toFixed(1);
-}
-updateDerived();
-
-const EVENTS=[
-  {type:'wind',label:'💨 Wind Gust',hint:'💨 <b>Wind gust!</b> Low-frequency disturbance. Increase <b>K_low</b> → S(jω)≈0 at low ω. High low-freq gain rejects it.',apply:(s)=>{s.disturbance+=60;s.distDecay=0.985;}},
-  {type:'slope',label:'⛰️ Slope Change',hint:'⛰️ <b>Road slope!</b> Ramp disturbance. You need high <b>Kv = K_low</b>. Low Kv → permanent drift = steady-state error!',apply:(s)=>{s.slopeActive=true;s.slopeMag=0.8;}},
-  {type:'noise',label:'📡 Sensor Glitch',hint:'📡 <b>Sensor noise!</b> Enters through −T(s). Increase <b>α_hf</b> → |L(jω)|≪1 at high ω. Suppresses noise but may slow response.',apply:(s)=>{s.noiseAmp=30;}},
-  {type:'pothole',label:'🕳️ Pothole',hint:'🕳️ <b>Pothole (impulse)!</b> Tests bandwidth. Increase <b>ω_gc</b> for fast response. Watch out — too high and phase margin drops!',apply:(s)=>{s.disturbance+=90;s.distDecay=0.93;}},
-  {type:'wind',label:'💨 Strong Wind',hint:'💨 <b>Strong sustained wind!</b> |L(jω)|≫1 at low freq → T≈1, S≈0. Output tracks reference, disturbance rejected. Raise <b>K_low</b>!',apply:(s)=>{s.disturbance+=80;s.distDecay=0.99;}},
-  {type:'oscillation',label:'🌀 Stability Check',hint:'🌀 <b>Stability check!</b> PM ≈ 45°×dd. If dd is too small, PM is low → oscillation! Increase <b>dd</b> for wider −20dB/dec crossover region.',apply:(s)=>{if(s.PM<30){s.disturbance+=50;s.carVel+=20;}}},
-];
-
-function triggerEvent(ev){
-  ev.apply(state);
-  document.getElementById('hint-text').innerHTML=ev.hint;
-  const el=document.getElementById('event-overlay');
-  el.textContent=ev.label;
-  el.style.opacity=1;
-  setTimeout(()=>el.style.opacity=0,1200);
-  state.obstacles.push({x:roadCanvas.width+60,type:ev.type,label:ev.label});
-}
-
-function controlStep(){
-  const s=state;
-  const noise=s.noiseAmp*(Math.random()-0.5)*2;
-  const measuredError=(s.targetY-s.carY)+noise;
-  s.error=s.targetY-s.carY;
-  if(s.slopeActive){
-    s.targetY+=s.slopeMag*s.dt;
-    if(Math.abs(s.targetY)>roadCanvas.height*0.28){s.slopeActive=false;s.targetY=0;}
-  }
-  s.integral+=measuredError*s.dt;
-  s.integral=Math.max(-40,Math.min(40,s.integral));
-  const Kp=s.Wgc*s.DD*0.8;
-  const Ki=s.Klow*0.15;
-  const Kd=s.DD*0.3;
-  const Kn=1.0/(s.HF+0.5);
-  const rawU=Kp*measuredError+Ki*s.integral+Kd*measuredError*s.Wgc*0.1;
-  const u=rawU*Kn;
-  s.carVel+=(u-s.carVel*1.5+s.disturbance*0.08)*s.dt*2;
-  s.carVel=Math.max(-120,Math.min(120,s.carVel));
-  s.carY+=s.carVel*s.dt;
-  s.disturbance*=s.distDecay;
-  if(Math.abs(s.disturbance)<0.01)s.disturbance=0;
-  s.noiseAmp*=0.97;
-  const limit=roadCanvas.height*0.42;
-  if(Math.abs(s.carY-s.targetY)>limit){s.carY=s.targetY+Math.sign(s.carY-s.targetY)*limit;s.carVel*=-0.3;}
-  const absErr=Math.abs(s.error);
-  const penalty=absErr>5?(absErr-5)*0.04:0;
-  s.scoreF=Math.max(0,Math.min(100,s.scoreF-penalty+0.02));
-  s.score=Math.round(s.scoreF);
-  document.getElementById('score-disp').textContent=s.score;
-  document.getElementById('err-disp').textContent=absErr.toFixed(1);
-  document.getElementById('score-disp').style.color=s.score>70?'#50fa7b':s.score>40?'#ffd700':'#fa5050';
-}
-
-function drawRoad(){
-  const W=roadCanvas.width,H=roadCanvas.height;
-  const cx=W/2,cy=H/2;
-  ctx.clearRect(0,0,W,H);
-  const sky=ctx.createLinearGradient(0,0,0,H*0.45);
-  sky.addColorStop(0,'#050510');sky.addColorStop(1,'#0a0a25');
-  ctx.fillStyle=sky;ctx.fillRect(0,0,W,H*0.45);
-  const grd=ctx.createLinearGradient(0,H*0.45,0,H);
-  grd.addColorStop(0,'#0d1a0d');grd.addColorStop(1,'#050f05');
-  ctx.fillStyle=grd;ctx.fillRect(0,H*0.45,W,H*0.55);
-  const roadTop=H*0.25,roadBot=H*0.75;
-  ctx.fillStyle='#1a1a2e';ctx.fillRect(0,roadTop,W,roadBot-roadTop);
-  ctx.strokeStyle='#ffffff33';ctx.lineWidth=3;
-  ctx.beginPath();ctx.moveTo(0,roadTop);ctx.lineTo(W,roadTop);ctx.stroke();
-  ctx.beginPath();ctx.moveTo(0,roadBot);ctx.lineTo(W,roadBot);ctx.stroke();
-  const targetAbsY=cy+state.targetY;
-  ctx.setLineDash([20,15]);ctx.strokeStyle='#ffd70088';ctx.lineWidth=2;
-  ctx.beginPath();ctx.moveTo(0,targetAbsY);ctx.lineTo(W,targetAbsY);ctx.stroke();
-  ctx.setLineDash([]);
-  state.roadOffset=(state.roadOffset+3)%80;
-  ctx.strokeStyle='#ffffff22';ctx.lineWidth=2;
-  for(let x=-80+state.roadOffset;x<W+80;x+=80){
-    ctx.beginPath();ctx.moveTo(x,roadTop+8);ctx.lineTo(x+40,roadTop+8);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(x,roadBot-8);ctx.lineTo(x+40,roadBot-8);ctx.stroke();
-  }
-  const absErr=Math.abs(state.error);
-  const errH=Math.min(absErr*1.5,H*0.3);
-  const errColor=absErr<15?'#50fa7b':absErr<40?'#ffd700':'#fa5050';
-  ctx.fillStyle='#ffffff11';ctx.fillRect(8,H/2-H*0.15,12,H*0.3);
-  ctx.fillStyle=errColor;ctx.fillRect(8,H/2-errH/2,12,errH);
-  ctx.fillStyle='#888';ctx.font='8px monospace';ctx.fillText('err',6,H/2-H*0.15-4);
-  const carAbsY=cy+state.carY;
-  const carW=44,carH=22,carX=state.carX;
-  ctx.fillStyle='rgba(0,0,0,0.3)';
-  ctx.beginPath();ctx.ellipse(carX,carAbsY+carH*0.5+2,carW*0.55,5,0,0,Math.PI*2);ctx.fill();
-  const bodyGrad=ctx.createLinearGradient(carX-carW/2,carAbsY-carH/2,carX-carW/2,carAbsY+carH/2);
-  bodyGrad.addColorStop(0,'#4080ff');bodyGrad.addColorStop(0.5,'#2255cc');bodyGrad.addColorStop(1,'#112266');
-  ctx.fillStyle=bodyGrad;ctx.beginPath();ctx.roundRect(carX-carW/2,carAbsY-carH/2,carW,carH,5);ctx.fill();
-  ctx.fillStyle='#88ccff44';ctx.beginPath();ctx.roundRect(carX-carW*0.25,carAbsY-carH/2-9,carW*0.5,12,3);ctx.fill();
-  ctx.fillStyle='#ffffaa';ctx.shadowColor='#ffffaa';ctx.shadowBlur=8;
-  ctx.beginPath();ctx.arc(carX+carW/2-4,carAbsY-6,3,0,Math.PI*2);ctx.fill();
-  ctx.beginPath();ctx.arc(carX+carW/2-4,carAbsY+6,3,0,Math.PI*2);ctx.fill();
-  ctx.shadowBlur=0;
-  ctx.fillStyle='#111';ctx.strokeStyle='#444';ctx.lineWidth=2;
-  [[-carW/2+6,-carH/2+2],[carW/2-6,-carH/2+2],[-carW/2+6,carH/2-2],[carW/2-6,carH/2-2]].forEach(([dx,dy])=>{
-    ctx.beginPath();ctx.arc(carX+dx,carAbsY+dy,5,0,Math.PI*2);ctx.fill();ctx.stroke();
-  });
-  state.obstacles.forEach((ob)=>{
-    ob.x-=4;
-    const oy=cy;
-    let color,icon;
-    if(ob.type==='wind'){color='#50b4fa';icon='💨';}
-    else if(ob.type==='slope'){color='#ffa550';icon='⛰️';}
-    else if(ob.type==='noise'){color='#c850fa';icon='📡';}
-    else if(ob.type==='oscillation'){color='#ffd700';icon='🌀';}
-    else{color='#fa5050';icon='🕳️';}
-    ctx.fillStyle=color+'44';ctx.strokeStyle=color;ctx.lineWidth=2;
-    ctx.beginPath();ctx.roundRect(ob.x-28,oy-22,56,44,8);ctx.fill();ctx.stroke();
-    ctx.font='18px serif';ctx.textAlign='center';ctx.fillStyle='white';
-    ctx.fillText(icon,ob.x,oy+7);ctx.textAlign='left';
-  });
-  state.obstacles=state.obstacles.filter(ob=>ob.x>-80);
-  state.errorTrace.push(state.error);
-  if(state.errorTrace.length>120)state.errorTrace.shift();
-  ctx.strokeStyle='#fa505088';ctx.lineWidth=1.5;ctx.beginPath();
-  const traceW=W*0.35,traceH=H*0.12,traceX=W-traceW-10,traceY=H-traceH-10;
-  ctx.fillStyle='#0a0a2088';ctx.fillRect(traceX,traceY,traceW,traceH);
-  ctx.fillStyle='#555';ctx.font='8px monospace';ctx.fillText('error signal e(t)',traceX+4,traceY-3);
-  state.errorTrace.forEach((e,i)=>{
-    const px=traceX+(i/120)*traceW;
-    const py=traceY+traceH/2-e*0.4;
-    if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
-  });
-  ctx.stroke();
-  ctx.strokeStyle='#ffffff22';ctx.lineWidth=1;
-  ctx.beginPath();ctx.moveTo(traceX,traceY+traceH/2);ctx.lineTo(traceX+traceW,traceY+traceH/2);ctx.stroke();
-}
-
-function tickEvents(){
-  state.t++;state.eventTimer++;
-  if(state.eventTimer>=state.nextEventIn){
-    state.eventTimer=0;
-    state.nextEventIn=180+Math.floor(Math.random()*120);
-    triggerEvent(EVENTS[Math.floor(Math.random()*EVENTS.length)]);
-  }
-  const remaining=state.nextEventIn-state.eventTimer;
-  const qd=document.getElementById('queue-display');
-  if(remaining/state.nextEventIn<0.3){
-    qd.innerHTML=`<span style="color:#fa5050">⚠️ Incoming disturbance in ${Math.ceil(remaining/30)}s...</span>`;
-  }else{
-    qd.innerHTML=`<span style="color:#50fa7b">✓ Road clear — tune your controller now</span>`;
-  }
-}
-
-function loop(){controlStep();tickEvents();drawRoad();requestAnimationFrame(loop);}
-loop();
-</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="js/state.js"></script>
+<script src="js/controller.js"></script>
+<script src="js/bode.js"></script>
+<script src="js/road.js"></script>
+<script src="js/events.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/game.js"></script>
 </body>
 </html>
