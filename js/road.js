@@ -10,9 +10,10 @@ window.Road = {
     ctx.fillRect(0, 0, width, height);
 
     // Update roadOffset
-    const period = 1000000;
-    GS.roadOffset = ((GS.roadOffset || 0) + (GS.horizontalSpeed || 3)) % period + period;
-    GS.roadOffset = GS.roadOffset % period;
+    const roadOffsetPeriod = 1000000;
+    const speed = (GS.horizontalSpeed !== undefined && GS.horizontalSpeed !== null) ? GS.horizontalSpeed : 3;
+    const nextRoadOffset = (GS.roadOffset || 0) + speed;
+    GS.roadOffset = ((nextRoadOffset % roadOffsetPeriod) + roadOffsetPeriod) % roadOffsetPeriod;
 
     // 2. Road
     const roadH = height * 0.55;
