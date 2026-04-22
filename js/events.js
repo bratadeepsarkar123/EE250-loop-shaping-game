@@ -60,7 +60,7 @@ window.Events = (function() {
                 GS.eventTimer = 0;
                 GS.nextEventIn = 150 + Math.floor(Math.random() * 120);
 
-                const eventTypes = ['wind', 'slope', 'noise', 'pothole', 'crosswind', 'speedzone'];
+                const eventTypes = ['wind', 'slope', 'noise', 'pothole', 'crosswind', 'speedzone', 'stability'];
 
                 // Keep picking until we get a valid one
                 let type;
