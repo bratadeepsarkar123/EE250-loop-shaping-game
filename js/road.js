@@ -10,7 +10,9 @@ window.Road = {
     ctx.fillRect(0, 0, width, height);
 
     // Update roadOffset
-    GS.roadOffset = (GS.roadOffset || 0) + (GS.horizontalSpeed || 0);
+    const period = 1000000;
+    GS.roadOffset = ((GS.roadOffset || 0) + (GS.horizontalSpeed || 3)) % period + period;
+    GS.roadOffset = GS.roadOffset % period;
 
     // 2. Road
     const roadH = height * 0.55;
@@ -85,7 +87,7 @@ window.Road = {
           if (Math.abs(carScreenX - cpScreenX) < 30 && !cp.collected) {
             cp.collected = true;
             GS.speedBoostActive = true;
-            this.speedBoostTimer = 120;
+            window.Road.speedBoostTimer = 120;
             GS.speedScore = (GS.speedScore || 0) + 5;
           }
         }
@@ -172,17 +174,17 @@ window.Road = {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    if (GS.errorTrace && GS.errorTrace.length > 0) {
+    const errorTraceWindow = (GS.errorTrace || []).slice(-120);
+    if (errorTraceWindow.length > 0) {
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
 
-      const stepX = chartW / Math.max(1, GS.errorTrace.length - 1);
+      const stepX = chartW / Math.max(1, errorTraceWindow.length - 1);
 
-      GS.errorTrace.forEach((err, index) => {
+      errorTraceWindow.forEach((err, index) => {
         const x = chartX + index * stepX;
         // scale: ±40px maps to ±chartH/2
-        // y = chartY + chartH/2 - (err / 40) * (chartH/2)
         const y = chartY + chartH / 2 - (err / 40) * (chartH / 2);
 
         if (index === 0) {
@@ -205,7 +207,8 @@ window.Road = {
       const alpha = 0.6 + 0.4 * Math.sin((GS.t || 0) * 8);
       ctx.strokeStyle = `rgba(255,50,50,${alpha})`;
       ctx.lineWidth = 4;
-      ctx.strokeRect(0, 0, width, height);
+      const inset = ctx.lineWidth / 2;
+      ctx.strokeRect(inset, inset, width - ctx.lineWidth, height - ctx.lineWidth);
 
       ctx.fillStyle = '#ff4444';
       ctx.font = 'bold 13px Arial';
@@ -215,12 +218,12 @@ window.Road = {
     }
 
     // 9. Speed boost flash
-    if (GS.speedBoostActive && this.speedBoostTimer > 0) {
-      this.speedBoostTimer--;
+    if (GS.speedBoostActive && window.Road.speedBoostTimer > 0) {
+      window.Road.speedBoostTimer--;
 
       let opacity = 1.0;
-      if (this.speedBoostTimer <= 60) {
-        opacity = this.speedBoostTimer / 60;
+      if (window.Road.speedBoostTimer <= 60) {
+        opacity = window.Road.speedBoostTimer / 60;
       }
 
       ctx.fillStyle = `rgba(80,250,123,${opacity})`;
@@ -229,7 +232,7 @@ window.Road = {
       ctx.textBaseline = 'middle';
       ctx.fillText('🏁 SPEED BOOST!', width / 2, height / 2);
 
-      if (this.speedBoostTimer === 0) {
+      if (window.Road.speedBoostTimer === 0) {
         GS.speedBoostActive = false;
       }
     }
