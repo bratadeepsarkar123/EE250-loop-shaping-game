@@ -1,7 +1,6 @@
 window.Events = (function() {
     let crosswindTimer = 0;
-    let stabilityTimer = 0;
-    let preEventDD = null;
+    let boostTimer = 0;
 
     return {
         trigger: function(type, GS) {
@@ -31,17 +30,18 @@ window.Events = (function() {
                     GS.currentHint = '🌀 Crosswind! Sinusoidal disturbance — tests S(jω). Balance ω_gc vs dd.';
                     break;
                 case 'stability':
-                    if (typeof GS.DD !== 'number') return;
-                    if (preEventDD === null) {
-                        preEventDD = GS.DD;
+                    if (typeof GS.DD !== 'number') break;
+                    if (GS._preEventDD === undefined) {
+                        GS._preEventDD = GS.DD;
                     }
                     GS.DD = 0.3; // force low PM
-                    stabilityTimer = 0; // reset recovery timer
+                    GS._stabilityTimer = 0; // reset recovery timer
                     GS.currentHint = '⚡ Stability Check! PM dropped — raise dd before car oscillates!';
                     break;
                 case 'speedzone':
                     if (!GS.checkpoints) GS.checkpoints = [];
-                    GS.checkpoints.push({ x: GS.distanceTravelled + 400, collected: false });
+                    const baseX = typeof GS.distanceTravelled === 'number' ? GS.distanceTravelled : 0;
+                    GS.checkpoints.push({ x: baseX + 400, collected: false });
                     GS.currentHint = '🏁 Speed Zone ahead! Raise ω_gc for bandwidth boost — but watch PM!';
                     break;
             }
@@ -69,7 +69,7 @@ window.Events = (function() {
                     type = eventTypes[Math.floor(Math.random() * eventTypes.length)];
                 } while (
                     (type === 'slope' && GS.slopeActive) ||
-                    (type === 'stability' && preEventDD !== null)
+                    (type === 'stability' && GS._preEventDD !== undefined)
                 );
 
                 this.trigger(type, GS);
@@ -86,12 +86,24 @@ window.Events = (function() {
             }
 
             // 4. Stability event auto-recovery
-            if (preEventDD !== null) {
-                stabilityTimer++;
-                if (stabilityTimer > 200) {
-                    GS.DD = preEventDD;
-                    preEventDD = null;
+            if (GS._preEventDD !== undefined) {
+                GS._stabilityTimer++;
+                if (GS._stabilityTimer > 200) {
+                    GS.DD = GS._preEventDD;
+                    GS._preEventDD = undefined;
+                    GS._stabilityTimer = 0;
                 }
+            }
+
+            // 5. SpeedBoost auto-cancel
+            if (GS.speedBoostActive) {
+                boostTimer++;
+                if (boostTimer >= 120) {
+                    GS.speedBoostActive = false;
+                    boostTimer = 0;
+                }
+            } else {
+                boostTimer = 0;
             }
         }
     };
