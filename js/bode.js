@@ -7,6 +7,11 @@ window.Bode = (function() {
   let chartInstance = null;
 
   function init(canvasEl) {
+    if (chartInstance) {
+      chartInstance.destroy();
+      chartInstance = null;
+    }
+
     const data0dB = freqs.map(() => 0);
 
     chartInstance = new Chart(canvasEl, {
@@ -49,15 +54,11 @@ window.Bode = (function() {
             pointRadius: 0
           },
           {
-            label: 'PM region',
+            label: 'w2 marker',
             data: [],
             borderColor: '#50fa7b66',
-            borderWidth: 1,
-            borderDash: [2, 4],
-            showLine: true,
-            pointRadius: 0,
-            fill: '-1',
-            backgroundColor: '#7eb8ff22'
+            pointRadius: 5,
+            showLine: false
           }
         ]
       },
@@ -91,7 +92,8 @@ window.Bode = (function() {
   }
 
   function update(GS) {
-    if (!this.chart) return;
+    if (!chartInstance) return;
+    if (!window.Controller || typeof window.Controller.computeBodeMag !== 'function') return;
 
     const dataMain = freqs.map(w => 20 * Math.log10(Math.max(window.Controller.computeBodeMag(w, GS), 1e-6)));
     const dataWgc = freqs.map(w => Math.abs(Math.log10(w) - Math.log10(GS.Wgc)) < 0.07 ? 60 : null);
@@ -102,12 +104,12 @@ window.Bode = (function() {
     const dataW1 = freqs.map(w => Math.abs(Math.log10(w) - Math.log10(w1)) < 0.06 ? 60 : null);
     const dataW2 = freqs.map(w => Math.abs(Math.log10(w) - Math.log10(w2)) < 0.06 ? 60 : null);
 
-    this.chart.data.datasets[0].data = dataMain;
-    this.chart.data.datasets[2].data = dataWgc;
-    this.chart.data.datasets[3].data = dataW1;
-    this.chart.data.datasets[4].data = dataW2;
+    chartInstance.data.datasets[0].data = dataMain;
+    chartInstance.data.datasets[2].data = dataWgc;
+    chartInstance.data.datasets[3].data = dataW1;
+    chartInstance.data.datasets[4].data = dataW2;
 
-    this.chart.update('none');
+    chartInstance.update('none');
   }
 
   return {
