@@ -56,7 +56,7 @@ window.Bode = (function() {
           {
             label: 'w2 marker',
             data: [],
-            borderColor: '#50fa7b66',
+            borderColor: '#50fa7b',
             pointRadius: 5,
             showLine: false
           }
