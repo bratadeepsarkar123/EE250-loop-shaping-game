@@ -18,6 +18,9 @@ window.Controller = {
   },
 
   step: function(GS, canvasHeight) {
+    // Compute PM at the very start of step
+    GS.PM = window.Controller.computePM(GS);
+
     // 1. Add noise to measured error: measuredError = (GS.targetY - GS.carY) + GS.noiseAmp*(Math.random()-0.5)*2
     let measuredError = (GS.targetY - GS.carY) + GS.noiseAmp * (Math.random() - 0.5) * 2;
 
@@ -132,14 +135,13 @@ window.Controller = {
     GS.smoothScore = clamp(GS.smoothScore - smoothPenalty + 0.02, 0, 100);
 
     let speedMultiplier = GS.speedBoostActive ? 1 : 0.5;
-    GS.speedScore = clamp(50 + (GS.horizontalSpeed - 3) * 10, 0, 100);
+    GS.speedScore = clamp(50 + ((GS.horizontalSpeed * speedMultiplier) - 3) * 10, 0, 100);
 
     GS.oscillating = GS.PM < 25;
     let scoreMult = GS.oscillating ? 0.5 : 1;
     GS.totalScore = Math.round((GS.accuracyScore * 0.4 + GS.smoothScore * 0.3 + GS.speedScore * 0.3) * scoreMult);
 
-    // 17. Update GS.PM and GS.Kv:
-    GS.PM = window.Controller.computePM(GS);
+    // 17. Update GS.Kv and GS.bandwidth:
     GS.Kv = GS.Klow;
     GS.bandwidth = GS.Wgc;
 
